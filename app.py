@@ -4,78 +4,77 @@ import pandas as pd
 import random
 import time
 
-# הגדרות דף
 st.set_page_config(page_title="הגמד והענק - פורים", layout="centered")
 
-# חיבור לגוגל שיטס
+# חיבור לגוגל שיטס (חובה להגדיר Secrets כפי שהסברתי קודם)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def get_data():
-    return conn.read(worksheet="Sheet1")
-
-def save_data(df):
-    conn.update(worksheet="Sheet1", data=df)
-
-# פונקציה לביצוע ההגרלה
-def perform_lottery(names):
+def perform_lottery(df):
+    names = df['Name'].tolist()
     shuffled = names.copy()
+    # אלגוריתם שמוודא שאף אחד לא מגריל את עצמו
     while any(names[i] == shuffled[i] for i in range(len(names))):
         random.shuffle(shuffled)
-    return dict(zip(names, shuffled))
+    df['Target'] = shuffled
+    return df
 
-# תפריט
-menu = st.sidebar.selectbox("תפריט", ["דף הגרלה", "ניהול (HR)"])
+menu = st.sidebar.selectbox("תפריט", ["כניסת עובדים", "ניהול (HR)"])
 
 if menu == "ניהול (HR)":
     st.title("ניהול משאבי אנוש 🎭")
-    password = st.text_input("הזיני סיסמה", type="password")
+    admin_pw = st.text_input("הזיני סיסמת מנהלת", type="password")
     
-    if password == "פורים2024":
-        url = st.text_input("הדביקי כאן את לינק ה-Google Sheets שלך:")
-        
-        if st.button("טען רשימת עובדים ובצע הגרלה"):
+    if admin_pw == "פורים2026": # שנה לסיסמה שתבחר
+        st.write("כאן תוכלי להפעיל את ההגרלה לכל 100 העובדים בלחיצת כפתור.")
+        if st.button("בצע הגרלה ושמור תוצאות"):
             try:
-                # קריאת הנתונים מהלינק
-                df_names = conn.read(spreadsheet=url)
-                names_list = df_names.iloc[:, 0].tolist()
-                
-                # ביצוע הגרלה
-                assignments = perform_lottery(names_list)
-                
-                # יצירת טבלה חדשה לשמירה
-                results_df = pd.DataFrame(list(assignments.items()), columns=["Gamad", "Anak"])
-                
-                # שמירה חזרה לגיליון
-                conn.update(spreadsheet=url, data=results_df)
-                st.success("ההגרלה בוצעה והנתונים נשמרו בגוגל שיטס!")
-                st.dataframe(results_df)
+                # קריאת נתונים (שמות ומספרי עובד)
+                df = conn.read(ttl=0)
+                if 'Name' in df.columns and 'ID' in df.columns:
+                    df_results = perform_lottery(df)
+                    # עדכון הגיליון עם התוצאות בעמודת Target
+                    conn.update(data=df_results)
+                    st.success("ההגרלה בוצעה! התוצאות נשמרו בגיליון בצורה מאובטחת.")
+                else:
+                    st.error("שגיאה: וודאי שיש עמודות בשם 'Name' ו-'ID' בגיליון.")
             except Exception as e:
-                st.error(f"שגיאה בחיבור לגיליון: {e}")
-    else:
-        st.warning("סיסמה שגויה")
+                st.error(f"שגיאה טכנית: {e}")
 
-elif menu == "דף הגרלה":
-    st.title("🎈 משחק הגמד והענק - פורים")
+elif menu == "כניסת עובדים":
+    st.title("🎈 משחק הגמד והענק")
     
-    sheet_url = st.text_input("הזינו את קישור המשחק (יסופק ע''י HR):", type="password")
-    
-    if sheet_url:
-        try:
-            data = conn.read(spreadsheet=sheet_url)
-            names_list = data["Gamad"].tolist()
+    try:
+        # טעינת נתונים טריים מהגיליון
+        data = conn.read(ttl=0)
+        
+        if 'Target' not in data.columns or data['Target'].isnull().all():
+            st.warning("ההגרלה טרם בוצעה. הודעה תישלח לכולם כשהמשחק יתחיל!")
+        else:
+            # 1. בחירת שם מרשימה
+            names_list = sorted(data['Name'].tolist())
+            selected_user = st.selectbox("בחר/י את שמך מהרשימה:", [""] + names_list)
             
-            user_name = st.selectbox("מי את/ה?", ["בחר שם..."] + names_list)
-            
-            if user_name != "בחר שם...":
+            if selected_user:
+                # 2. הזנת מספר עובד (סיסמה)
+                emp_id = st.text_input("הזינו מספר עובד לזיהוי:", type="password")
+                
                 if st.button("סובב את הגלגל! 🎡"):
-                    with st.empty():
-                        for i in range(10):
-                            st.write(f"🎰 מגריל... {random.choice(names_list)}")
-                            time.sleep(0.1)
+                    # בדיקה האם ה-ID תואם לשם בגיליון
+                    actual_id = str(data[data['Name'] == selected_user]['ID'].values[0])
+                    
+                    if str(emp_id) == actual_id:
+                        # אנימציית הגרלה
+                        with st.empty():
+                            for _ in range(12):
+                                st.write(f"🎰 מחפש את הענק שלך... {random.choice(names_list)}")
+                                time.sleep(0.1)
                         
-                        target = data[data["Gamad"] == user_name]["Anak"].values[0]
+                        # חשיפת התוצאה
+                        target = data[data['Name'] == selected_user]['Target'].values[0]
                         st.balloons()
-                        st.success(f"הענק שלך הוא/היא: **{target}**")
-                        st.info("אל תשכח/י - לשמור בסוד! 🤫")
-        except:
-            st.error("לא ניתן לטעון את נתוני ההגרלה. וודאו שהקישור תקין.")
+                        st.markdown(f"### הענק שלך הוא/היא: **{target}**")
+                        st.info("זכור/י: לשמור על סודיות מוחלטת! 🤫")
+                    else:
+                        st.error("מספר עובד שגוי. אנא נסו שוב או פנו ל-HR.")
+    except Exception as e:
+        st.error("שגיאה בחיבור לנתונים. וודאו שה-Secrets מוגדרים נכון.")
