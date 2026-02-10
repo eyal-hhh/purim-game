@@ -76,5 +76,5 @@ elif menu == "כניסת עובדים":
                         st.info("זכור/י: לשמור על סודיות מוחלטת! 🤫")
                     else:
                         st.error("מספר עובד שגוי. אנא נסו שוב או פנו ל-HR.")
-    except Exception as e:
-        st.error("שגיאה בחיבור לנתונים. וודאו שה-Secrets מוגדרים נכון.")
+  except Exception as e:
+        st.error(f"שגיאה טכנית: {e}")
