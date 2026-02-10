@@ -59,4 +59,5 @@ elif menu == "כניסת עובדים":
                     else:
                         st.error("מספר עובד לא תקין. נסה/י שוב.")
     except Exception as e:
-        st.error(f"שגיאה טכנית בחיבור: {e}")
+        st.error(f"שגיאה טכנית: {e}")
+        st.write("פרטי תגובה מהשרת:", e)
