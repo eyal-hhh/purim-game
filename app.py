@@ -32,7 +32,6 @@ if menu == "ניהול (HR)":
                     df_results = perform_lottery(df)
                     conn.update(data=df_results)
                     st.success("ההגרלה הסתיימה בהצלחה! התוצאות נשמרו.")
-                    st.dataframe(df_results)
                 else:
                     st.error("וודאו שיש עמודות בשם 'Name' ו-'ID' בגיליון.")
             except Exception as e:
@@ -40,7 +39,6 @@ if menu == "ניהול (HR)":
 
 elif menu == "כניסת עובדים":
     st.title("🎈 משחק הגמד והענק")
-    
     try:
         data = conn.read(ttl=0)
         if 'Target' not in data.columns or data['Target'].isnull().all():
@@ -48,13 +46,10 @@ elif menu == "כניסת עובדים":
         else:
             names_list = sorted(data['Name'].tolist())
             selected_user = st.selectbox("בחר/י את שמך:", [""] + names_list)
-            
             if selected_user:
                 emp_id = st.text_input("הזינו מספר עובד (סיסמה):", type="password")
-                
                 if st.button("גלה/י מי הענק שלי! 🎡"):
                     actual_id = str(data[data['Name'] == selected_user]['ID'].values[0])
-                    
                     if str(emp_id) == actual_id:
                         with st.spinner("מגריל..."):
                             time.sleep(1.5)
@@ -64,4 +59,4 @@ elif menu == "כניסת עובדים":
                     else:
                         st.error("מספר עובד לא תקין. נסה/י שוב.")
     except Exception as e:
-        st.error(f"שגיאה בחיבור לנתונים: {e}")
+        st.error(f"שגיאה טכנית בחיבור: {e}")
