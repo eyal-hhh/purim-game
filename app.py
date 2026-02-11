@@ -25,6 +25,8 @@ st.markdown("""
     }
     .stTextInput input { font-size: 16px !important; }
     div[data-testid="stHorizontalBlock"] { background: #f8f9fa; padding: 10px; border-radius: 10px; }
+    /* עיצוב כפתור מחיקה/הגרלה שונה כדי שיבלוט כמסוכן */
+    .danger-btn button { background-color: #d32f2f !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -45,16 +47,9 @@ def load_and_clean_data():
         return None
 
 def play_roulette_sound():
-    # צליל אמיתי של כדור רולטה מסתובב
-    sound_url = "https://actions.google.com/sounds/v1/sports/football_kick_off.ogg" # צליל פתיחה חגיגי
-    # לינק חלופי לצליל תקתוקי רולטה (במידה ויש לך לינק MP3 ישיר של יוטיוב תוכל להחליף פה)
+    # צליל תקתוקי רולטה
     roulette_ball_sound = "https://www.soundjay.com/misc/sounds/magic-chime-01.mp3"
-    
-    sound_html = f"""
-        <audio autoplay>
-            <source src="{roulette_ball_sound}" type="audio/mp3">
-        </audio>
-    """
+    sound_html = f"""<audio autoplay><source src="{roulette_ball_sound}" type="audio/mp3"></audio>"""
     st.components.v1.html(sound_html, height=0)
 
 # ניווט עליון
@@ -77,23 +72,46 @@ if menu == "ניהול (HR)":
     else:
         data = load_and_clean_data()
         if data is not None:
+            # --- אזור הגרלה (Danger Zone) ---
+            with st.expander("⚠️ אזור רגיש - ביצוע הגרלה"):
+                st.warning("שים/י לב: ביצוע הגרלה ימחק את כל רשימת הגמדים הקיימת ויבצע שיבוץ מחדש לכולם!")
+                confirm_pw = st.text_input("הקלידי שוב את סיסמת המנהלת לאישור:", type="password", key="confirm_lottery")
+                
+                if confirm_pw == "פורים2026":
+                    st.write("בטוחים? הפעולה אינה ניתנת לביטול.")
+                    if st.button("🔥 אני בטוח/ה - הפעל הגרלה חדשה", key="final_lottery_btn"):
+                        # לוגיקת הגרלה
+                        df_copy = data.dropna(subset=['Name', 'ID']).copy()
+                        names = df_copy['Name'].tolist()
+                        shuffled = names.copy()
+                        random.shuffle(shuffled)
+                        # וידוא שאף אחד לא קיבל את עצמו
+                        while any(names[i] == shuffled[i] for i in range(len(names))):
+                            random.shuffle(shuffled)
+                        
+                        df_copy['Target'] = shuffled
+                        df_copy['Try'] = "0"
+                        df_copy['Timestamp'] = ""
+                        conn.update(data=df_copy)
+                        st.success("הגרלה חדשה בוצעה בהצלחה!")
+                        time.sleep(2)
+                        st.rerun()
+
+            st.write("---")
+            # כפתורי יציאה ודוח
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🎰 הפעל הגרלה"):
-                    # פונקציית הגרלה פנימית
-                    df_copy = data.dropna(subset=['Name', 'ID']).copy()
-                    shuffled = df_copy['Name'].tolist()
-                    random.shuffle(shuffled)
-                    df_copy['Target'] = shuffled
-                    df_copy['Try'] = "0"
-                    conn.update(data=df_copy)
-                    st.success("בוצע!")
-                    st.rerun()
+                csv = data.to_csv(index=False).encode('utf-8-sig')
+                st.download_button("📥 הורדת דוח CSV", data=csv, file_name="purim_report.csv")
             with col2:
                 if st.button("🚪 יציאה"):
                     st.session_state['admin_logged_in'] = False
                     st.rerun()
-            st.dataframe(data[['Name', 'Try', 'Timestamp', 'Target']].rename(columns={'Name': 'שם', 'Try': 'צפיות', 'Timestamp': 'זמן', 'Target': 'גמד'}), use_container_width=True)
+            
+            st.write("### 📊 דוח מעקב נוכחי")
+            st.dataframe(data[['Name', 'Try', 'Timestamp', 'Target']].rename(
+                columns={'Name': 'שם', 'Try': 'צפיות', 'Timestamp': 'זמן', 'Target': 'גמד'}), 
+                use_container_width=True)
 
 # --- מסך עובדים ---
 else:
@@ -119,7 +137,11 @@ else:
             user_data = data.loc[user_idx]
             st.markdown(f'<div class="welcome-msg"><h3>שלום, {st.session_state["logged_in_name"]}! 👋</h3></div>', unsafe_allow_html=True)
 
-            try_val = int(float(user_data.get('Try', '0')))
+            try:
+                try_val = int(float(user_data.get('Try', '0')))
+            except:
+                try_val = 0
+            
             if try_val > 0:
                 st.warning("המערכת מזהה שכבר הגרלת גמד בעבר.")
                 st.info(f"בוצע בתאריך: {user_data.get('Timestamp', 'לא ידוע')}")
@@ -135,21 +157,16 @@ else:
                     data.at[user_idx, 'Timestamp'] = now
                     conn.update(data=data)
                     
-                    # רולטה שמחולקת ל-5 שניות בדיוק
                     placeholder = st.empty()
                     names = data['Name'].tolist()
                     
-                    # שלב 1: מהיר מאוד (2 שניות)
+                    # רולטה של 5 שניות
                     for _ in range(40):
                         placeholder.markdown(f"<h2 style='text-align: center; color: gray;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
                         time.sleep(0.05)
-                    
-                    # שלב 2: מתחיל להאט (1.5 שניות)
                     for i in range(10):
                         placeholder.markdown(f"<h2 style='text-align: center; color: #FF4B4B;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
                         time.sleep(0.15)
-                    
-                    # שלב 3: עצירה מותחת (1.5 שניות)
                     for i in range(3):
                         placeholder.markdown(f"<h2 style='text-align: center; color: #FF4B4B; font-weight: bold;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
                         time.sleep(0.5)
