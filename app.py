@@ -5,39 +5,41 @@ import random
 import time
 from datetime import datetime, timedelta
 
-# הגדרות עמוד - layout="centered" מושלם למובייל
+# הגדרות עמוד
 st.set_page_config(page_title="הגמד והענק 2026", layout="centered", page_icon="🎭")
 
-# עיצוב CSS מותאם אישית לניווט עליון ומראה נקי במובייל
+# עיצוב CSS מותאם אישית למובייל - ללא תפריט צד
 st.markdown("""
     <style>
     /* הגדרות RTL ויישור לימין */
     .main { direction: rtl; }
     h1, h2, h3, p, div, span { text-align: right; direction: rtl; font-family: 'Segoe UI', sans-serif; }
     
-    /* העלמת תפריט הצד לחלוטין כדי שלא יציק במובייל */
+    /* הסתרת תפריט הצד לחלוטין למניעת שבירת עיצוב במובייל */
     [data-testid="stSidebar"] { display: none; }
     [data-testid="stSidebarNav"] { display: none; }
 
-    /* עיצוב כפתורים גדולים ונוחים למובייל */
+    /* עיצוב כפתורים רחבים ונוחים למגע */
     div.stButton > button, div.stForm submit_button > button { 
         width: 100%; border-radius: 12px; height: 3.5em; 
         background-color: #FF4B4B; color: white; font-weight: bold; font-size: 18px;
         box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+        border: none;
     }
     
-    /* עיצוב הודעת שלום */
+    /* עיצוב הודעת שלום בולטת וקריאה */
     .welcome-msg { 
-        background-color: #f8f9fa; padding: 18px; border-radius: 15px; 
+        background-color: #f1f3f4; padding: 20px; border-radius: 15px; 
         border-right: 8px solid #FF4B4B; margin-bottom: 20px; color: #202124;
         box-shadow: 0px 2px 4px rgba(0,0,0,0.05);
     }
+    .welcome-msg h3 { color: #000000; margin: 0; }
     
-    /* תיקון שדות קלט במובייל */
+    /* מניעת זום אוטומטי במובייל */
     .stTextInput input { font-size: 16px !important; }
-    
-    /* עיצוב רדיו הוריוזנטלי (הניווט החדש) */
-    div[data-testid="stMarkdownContainer"] > p { font-weight: bold; }
+
+    /* עיצוב כפתורי הניווט (Radio) בחלק העליון */
+    div[data-testid="stHorizontalBlock"] { background: #f8f9fa; padding: 10px; border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -70,9 +72,8 @@ def perform_lottery(df):
     df['Timestamp'] = ""
     return df
 
-# --- ניווט עליון חדש (במקום sidebar) ---
-st.markdown("### 🧭 לאן תרצו להגיע?")
-menu = st.radio("", ["כניסת עובדים", "ניהול (HR)"], horizontal=True)
+# --- ניווט עליון נקי (ללא כותרת) ---
+menu = st.radio("", ["כניסת עובדים", "ניהול (HR)"], horizontal=True, label_visibility="collapsed")
 st.write("---")
 
 # --- מסך ניהול ---
@@ -83,7 +84,7 @@ if menu == "ניהול (HR)":
     if not st.session_state['admin_logged_in']:
         with st.form("admin_login"):
             pw = st.text_input("סיסמת מנהלת:", help="הקלידי ולחצי Enter")
-            if st.form_submit_button("כניסה למערכת"):
+            if st.form_submit_button("כניסה"):
                 if pw == "פורים2026":
                     st.session_state['admin_logged_in'] = True
                     st.rerun()
@@ -107,6 +108,9 @@ if menu == "ניהול (HR)":
             st.dataframe(data[['Name', 'Try', 'Timestamp', 'Target']].rename(
                 columns={'Name': 'שם', 'Try': 'צפיות', 'Timestamp': 'זמן', 'Target': 'גמד'}), 
                 use_container_width=True)
+            
+            csv = data.to_csv(index=False).encode('utf-8-sig')
+            st.download_button("📥 הורדת דוח CSV", data=csv, file_name="purim_report.csv")
 
 # --- מסך עובדים ---
 else:
@@ -114,8 +118,8 @@ else:
     
     if 'logged_in_user_id' not in st.session_state:
         with st.form("login_form"):
-            emp_id_input = st.text_input("להתחלת המשחק, הזינו מספר עובד:")
-            if st.form_submit_button("כניסה"):
+            emp_id_input = st.text_input("הזינו מספר עובד לזיהוי:")
+            if st.form_submit_button("כניסה למערכת"):
                 data = load_and_clean_data()
                 if data is not None:
                     input_clean = str(emp_id_input).strip()
@@ -133,8 +137,10 @@ else:
             
             st.markdown(f'<div class="welcome-msg"><h3>שלום, {st.session_state["logged_in_name"]}! 👋</h3></div>', unsafe_allow_html=True)
 
-            try_val = user_data.get('Try', '0')
-            try_val = int(float(try_val)) if try_val != '' else 0
+            try:
+                try_val = int(float(user_data.get('Try', '0')))
+            except:
+                try_val = 0
             
             if try_val > 0:
                 st.warning("המערכת מזהה שכבר הגרלת גמד בעבר.")
