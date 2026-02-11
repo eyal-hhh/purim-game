@@ -29,6 +29,23 @@ def get_israel_time():
     # חישוב זמן ישראל (UTC+2)
     return (datetime.utcnow() + timedelta(hours=2)).strftime("%d/%m/%Y %H:%M:%S")
 
+def perform_lottery(df):
+    """פונקציה שמבצעת את ערבוב השמות"""
+    df = df.dropna(subset=['Name', 'ID']).copy()
+    names = df['Name'].tolist()
+    shuffled = names.copy()
+    
+    attempts = 0
+    # וידוא שאף אחד לא מקבל את עצמו
+    while any(names[i] == shuffled[i] for i in range(len(names))) and attempts < 100:
+        random.shuffle(shuffled)
+        attempts += 1
+        
+    df['Target'] = shuffled
+    df['Try'] = 0
+    df['Timestamp'] = ""
+    return df
+
 menu = st.sidebar.selectbox("תפריט ניווט", ["כניסת עובדים", "ניהול (HR)"])
 
 # --- מסך ניהול ---
@@ -38,7 +55,7 @@ if menu == "ניהול (HR)":
 
     if not st.session_state['admin_logged_in']:
         with st.form("admin_login"):
-            pw = st.text_input("סיסמת מנהלת:")
+            pw = st.text_input("סיסמת מנהלת (Enter לכניסה):")
             if st.form_submit_button("כניסה"):
                 if pw == "פורים2026":
                     st.session_state['admin_logged_in'] = True
@@ -46,18 +63,32 @@ if menu == "ניהול (HR)":
                 else: st.error("סיסמה שגויה")
     else:
         try:
+            # קריאת נתונים
             current_data = conn.read(ttl=0)
+            
+            # הכפתור שחזר מהגלות:
+            if st.button("🎰 בצע הגרלה (זהירות: זה מערבב מחדש ומאפס הכל!)"):
+                with st.spinner("מערבב את הגמדים..."):
+                    df_results = perform_lottery(current_data)
+                    conn.update(data=df_results)
+                    st.success("ההגרלה הסתיימה בהצלחה! השמות שובצו בגיליון.")
+                    time.sleep(1)
+                    st.rerun()
+
+            st.write("---")
             st.write("### 📊 דוח מעקב חסוי")
             
             st.dataframe(current_data[['Name', 'Try', 'Timestamp', 'Target']].rename(
                 columns={'Name': 'שם', 'Try': 'צפיות', 'Timestamp': 'זמן צפייה', 'Target': 'הגמד'}), use_container_width=True)
             
             csv = current_data.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("📥 הורדת דוח מלא", data=csv, file_name="purim_report.csv")
-            if st.button("יציאה"):
+            st.download_button("📥 הורדת דוח מלא (Excel/CSV)", data=csv, file_name="purim_report.csv")
+            
+            if st.sidebar.button("יציאת מנהלת"):
                 st.session_state['admin_logged_in'] = False
                 st.rerun()
-        except: st.error("שגיאה בטעינה")
+        except Exception as e: 
+            st.error(f"שגיאה בטעינת הנתונים: {e}")
 
 # --- מסך עובדים ---
 elif menu == "כניסת עובדים":
@@ -65,7 +96,7 @@ elif menu == "כניסת עובדים":
     
     if 'logged_in_user' not in st.session_state:
         with st.form("login_form"):
-            emp_id_input = st.text_input("הזינו מספר עובד:")
+            emp_id_input = st.text_input("הזינו מספר עובד (ולחצו Enter):")
             if st.form_submit_button("כניסה למערכת"):
                 data = conn.read(ttl=0)
                 data['ID'] = data['ID'].astype(str).str.strip().str.replace('.0', '', regex=False)
@@ -84,7 +115,6 @@ elif menu == "כניסת עובדים":
             
             st.markdown(f'<div class="welcome-msg"><h3>שלום, {st.session_state["logged_in_user"]}! 👋</h3></div>', unsafe_allow_html=True)
 
-            # בדיקה אם כבר צפה
             tries = pd.to_numeric(user_data.get('Try', 0), errors='coerce')
             
             if tries > 0:
@@ -99,12 +129,10 @@ elif menu == "כניסת עובדים":
                     target_name = user_data['Target']
                     now = get_israel_time()
                     
-                    # עדכון מיידי
                     data.at[user_idx, 'Try'] = 1
                     data.at[user_idx, 'Timestamp'] = now
                     conn.update(data=data)
                     
-                    # רולטה
                     placeholder = st.empty()
                     names = data['Name'].tolist()
                     for _ in range(15):
@@ -114,7 +142,8 @@ elif menu == "כניסת עובדים":
                     placeholder.markdown(f"<h1 style='text-align: center; color: #00CC00; font-size: 50px;'>✨ {target_name} ✨</h1>", unsafe_allow_html=True)
                     st.balloons()
                     st.success(f"חג שמח! הגמד שלך הוא/היא: {target_name}")
-        except Exception as e: st.error(f"שגיאה: {e}")
+        except Exception as e: 
+            st.error(f"שגיאה: {e}")
 
     if 'logged_in_user' in st.session_state:
         if st.sidebar.button("יציאת עובד"):
