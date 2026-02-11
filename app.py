@@ -3,7 +3,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import random
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # הגדרות עמוד ועיצוב RTL
 st.set_page_config(page_title="הגמד והענק - פורים 2026", layout="centered", page_icon="🎭")
@@ -19,6 +19,11 @@ st.markdown("""
 
 # חיבור לנתונים
 conn = st.connection("gsheets", type=GSheetsConnection)
+
+def get_israel_time():
+    # שרתי Streamlit רצים ב-UTC, נוסיף שעתיים לזמן ישראל (או 3 בשעון קיץ)
+    # נכון לעכשיו (פברואר) זה שעתיים
+    return (datetime.utcnow() + timedelta(hours=2)).strftime("%d/%m/%Y %H:%M:%S")
 
 def perform_lottery(df):
     df = df.dropna(subset=['Name', 'ID']).copy()
@@ -59,18 +64,16 @@ if menu == "ניהול (HR)":
         except Exception as e:
             st.error(f"שגיאה: {e}")
 
-# --- מסך עובדים (הזרימה החדשה) ---
+# --- מסך עובדים ---
 elif menu == "כניסת עובדים":
     st.markdown("<h1 style='text-align: center;'>🎈 פורים 2026: מי הגמד שלי?</h1>", unsafe_allow_html=True)
     
-    # שלב 1: כניסה עם קוד (מספר עובד)
     if 'logged_in_user' not in st.session_state:
         emp_id_input = st.text_input("להתחלת המשחק, הזינו מספר עובד:", type="password")
         if st.button("כניסה למערכת"):
             try:
                 data = conn.read(ttl=0)
                 data['ID'] = data['ID'].astype(str).str.strip().str.replace('.0', '', regex=False)
-                
                 user_match = data[data['ID'] == emp_id_input.strip()]
                 
                 if not user_match.empty:
@@ -82,7 +85,6 @@ elif menu == "כניסת עובדים":
             except Exception as e:
                 st.error(f"שגיאה בחיבור: {e}")
     
-    # שלב 2: העובד מזוהה
     else:
         try:
             data = conn.read(ttl=0)
@@ -97,22 +99,22 @@ elif menu == "כניסת עובדים":
                 </div>
             """, unsafe_allow_html=True)
 
-            # בדיקה אם כבר הגריל
             has_played = pd.to_numeric(user_data.get('Try', 0), errors='coerce') > 0
             
             if has_played:
-                st.warning("שימו לב: כבר הגרלתם גמד בעבר!")
-                st.info(f"תאריך ושעה: {user_data.get('Timestamp', 'לא ידוע')}")
-                st.markdown(f"### הגמד שקיבלת: **{user_data['Target']}**")
-                st.write("---")
-                st.write("לעובד הבא: נא לרענן את הדף (F5)")
+                st.warning("כבר הגרלת גמד בעבר!")
+                st.info(f"בוצע בתאריך: {user_data.get('Timestamp', 'לא ידוע')}")
+                st.markdown(f"<h2 style='text-align: center; color: #00CC00;'>הגמד שלך הוא/היא: {user_data['Target']}</h2>", unsafe_allow_html=True)
             
             else:
                 if st.button("🎡 הפעל רולטה וגלה מי הגמד שלי"):
-                    # עדכון נתונים
-                    now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                    now_israel = get_israel_time()
+                    
+                    # עדכון נתונים מקומי
                     data.at[user_idx, 'Try'] = 1
-                    data.at[user_idx, 'Timestamp'] = now
+                    data.at[user_idx, 'Timestamp'] = now_israel
+                    
+                    # שליחה לגוגל שיטס
                     conn.update(data=data)
                     
                     # אפקט רולטה
@@ -126,12 +128,11 @@ elif menu == "כניסת עובדים":
                     placeholder.markdown(f"<h1 style='text-align: center; color: #00CC00; font-size: 50px;'>✨ {target_name} ✨</h1>", unsafe_allow_html=True)
                     st.balloons()
                     st.success(f"חג שמח! הגמד שלך הוא/היא: {target_name}")
-                    st.write(f"הפעולה נרשמה במערכת בתאריך: {now}")
+                    st.write(f"הפעולה נרשמה במערכת בזמן ישראל: {now_israel}")
                     
         except Exception as e:
             st.error(f"תקלה בטעינת הנתונים: {e}")
 
-    # כפתור יציאה (אופציונלי במקום רענון)
     if 'logged_in_user' in st.session_state:
         if st.sidebar.button("יציאה מהמערכת (לעובד הבא)"):
             del st.session_state['logged_in_user']
