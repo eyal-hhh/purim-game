@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 # הגדרות עמוד
 st.set_page_config(page_title="הגמד והענק 2026", layout="centered", page_icon="🎭")
 
-# עיצוב CSS מותאם אישית
+# עיצוב CSS מותאם אישית למובייל
 st.markdown("""
     <style>
     .main { direction: rtl; }
@@ -25,8 +25,9 @@ st.markdown("""
     }
     .stTextInput input { font-size: 16px !important; }
     div[data-testid="stHorizontalBlock"] { background: #f8f9fa; padding: 10px; border-radius: 10px; }
-    /* עיצוב כפתור מחיקה/הגרלה שונה כדי שיבלוט כמסוכן */
-    .danger-btn button { background-color: #d32f2f !important; }
+    
+    /* תיקון צבע טקסט בטבלאות כדי שיהיה תמיד שחור וקריא */
+    [data-testid="stDataFrame"] td { color: #000000 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -38,16 +39,26 @@ def get_israel_time():
 def load_and_clean_data():
     try:
         df = conn.read(ttl=0)
-        for col in ['ID', 'Try', 'Name', 'Target', 'Timestamp']:
-            if col in df.columns:
-                df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip().replace('nan', '')
+        # וודא שכל העמודות קיימות בגיליון, אם לא - צור אותן ריקות
+        for col in ['Name', 'ID', 'Target', 'Try', 'Timestamp']:
+            if col not in df.columns:
+                df[col] = ""
+        
+        # ניקוי ערכי NaN (תאים ריקים)
+        df = df.fillna("")
+        
+        # המרה לטקסט וניקוי תווים מיותרים
+        for col in df.columns:
+            df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
+            # אם התא היה NaN והפך לטקסט "nan", נחזיר אותו להיות ריק
+            df[col] = df[col].replace('nan', '')
+            
         return df
     except Exception as e:
-        st.error(f"שגיאה בחיבור: {e}")
+        st.error(f"שגיאה בגישה לגוגל שיטס: {e}")
         return None
 
 def play_roulette_sound():
-    # צליל תקתוקי רולטה
     roulette_ball_sound = "https://www.soundjay.com/misc/sounds/magic-chime-01.mp3"
     sound_html = f"""<audio autoplay><source src="{roulette_ball_sound}" type="audio/mp3"></audio>"""
     st.components.v1.html(sound_html, height=0)
@@ -72,33 +83,25 @@ if menu == "ניהול (HR)":
     else:
         data = load_and_clean_data()
         if data is not None:
-            # --- אזור הגרלה (Danger Zone) ---
             with st.expander("⚠️ אזור רגיש - ביצוע הגרלה"):
-                st.warning("שים/י לב: ביצוע הגרלה ימחק את כל רשימת הגמדים הקיימת ויבצע שיבוץ מחדש לכולם!")
-                confirm_pw = st.text_input("הקלידי שוב את סיסמת המנהלת לאישור:", type="password", key="confirm_lottery")
-                
+                st.warning("שים/י לב: ביצוע הגרלה ימחק את כל הרשימה הקיימת!")
+                confirm_pw = st.text_input("הקלידי שוב סיסמה לאישור:", type="password")
                 if confirm_pw == "פורים2026":
-                    st.write("בטוחים? הפעולה אינה ניתנת לביטול.")
-                    if st.button("🔥 אני בטוח/ה - הפעל הגרלה חדשה", key="final_lottery_btn"):
-                        # לוגיקת הגרלה
+                    if st.button("🔥 הפעל הגרלה חדשה"):
                         df_copy = data.dropna(subset=['Name', 'ID']).copy()
                         names = df_copy['Name'].tolist()
                         shuffled = names.copy()
                         random.shuffle(shuffled)
-                        # וידוא שאף אחד לא קיבל את עצמו
                         while any(names[i] == shuffled[i] for i in range(len(names))):
                             random.shuffle(shuffled)
-                        
                         df_copy['Target'] = shuffled
                         df_copy['Try'] = "0"
                         df_copy['Timestamp'] = ""
                         conn.update(data=df_copy)
-                        st.success("הגרלה חדשה בוצעה בהצלחה!")
-                        time.sleep(2)
+                        st.success("בוצע!")
                         st.rerun()
 
             st.write("---")
-            # כפתורי יציאה ודוח
             col1, col2 = st.columns(2)
             with col1:
                 csv = data.to_csv(index=False).encode('utf-8-sig')
@@ -108,19 +111,22 @@ if menu == "ניהול (HR)":
                     st.session_state['admin_logged_in'] = False
                     st.rerun()
             
-            st.write("### 📊 דוח מעקב נוכחי")
-            st.dataframe(data[['Name', 'Try', 'Timestamp', 'Target']].rename(
-                columns={'Name': 'שם', 'Try': 'צפיות', 'Timestamp': 'זמן', 'Target': 'גמד'}), 
+            st.write("### 📊 דוח מעקב")
+            # הוספת "טרם" לתאים ריקים בזמן התצוגה כדי שיהיה מלל בולט
+            display_df = data[['Name', 'Try', 'Timestamp', 'Target']].copy()
+            display_df['Timestamp'] = display_df['Timestamp'].replace('', 'טרם בוצע')
+            
+            st.dataframe(display_df.rename(
+                columns={'Name': 'שם', 'Try': 'צפיות', 'Timestamp': 'זמן הגרלה', 'Target': 'הגמד'}), 
                 use_container_width=True)
 
 # --- מסך עובדים ---
 else:
     st.markdown("<h1 style='text-align: center;'>🎈 פורים 2026: מי הגמד שלי?</h1>", unsafe_allow_html=True)
-    
     if 'logged_in_user_id' not in st.session_state:
         with st.form("login_form"):
             emp_id_input = st.text_input("הזינו מספר עובד:")
-            if st.form_submit_button("כניסה למערכת"):
+            if st.form_submit_button("כניסה"):
                 data = load_and_clean_data()
                 if data is not None:
                     input_clean = str(emp_id_input).strip()
@@ -137,16 +143,11 @@ else:
             user_data = data.loc[user_idx]
             st.markdown(f'<div class="welcome-msg"><h3>שלום, {st.session_state["logged_in_name"]}! 👋</h3></div>', unsafe_allow_html=True)
 
-            try:
-                try_val = int(float(user_data.get('Try', '0')))
-            except:
-                try_val = 0
-            
+            try_val = int(float(user_data.get('Try', '0')))
             if try_val > 0:
-                st.warning("המערכת מזהה שכבר הגרלת גמד בעבר.")
+                st.warning("כבר הגרלת גמד בעבר!")
                 st.info(f"בוצע בתאריך: {user_data.get('Timestamp', 'לא ידוע')}")
                 st.error("מטעמי אבטחה, לא ניתן לצפות בשם שוב.")
-                st.markdown("---")
                 st.markdown("### 📞 שכחת מי הגמד? פנה למשאבי אנוש.")
             else:
                 if st.button("🎡 הפעל רולטה!"):
@@ -159,8 +160,7 @@ else:
                     
                     placeholder = st.empty()
                     names = data['Name'].tolist()
-                    
-                    # רולטה של 5 שניות
+                    # רולטה 5 שניות
                     for _ in range(40):
                         placeholder.markdown(f"<h2 style='text-align: center; color: gray;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
                         time.sleep(0.05)
