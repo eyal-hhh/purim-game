@@ -5,22 +5,39 @@ import random
 import time
 from datetime import datetime, timedelta
 
-# הגדרות עמוד
+# הגדרות עמוד - layout="centered" מושלם למובייל
 st.set_page_config(page_title="הגמד והענק 2026", layout="centered", page_icon="🎭")
 
-# עיצוב RTL והתאמה למובייל
+# עיצוב CSS מותאם אישית לניווט עליון ומראה נקי במובייל
 st.markdown("""
     <style>
+    /* הגדרות RTL ויישור לימין */
     .main { direction: rtl; }
-    h1, h2, h3, p, div { text-align: right; direction: rtl; }
+    h1, h2, h3, p, div, span { text-align: right; direction: rtl; font-family: 'Segoe UI', sans-serif; }
+    
+    /* העלמת תפריט הצד לחלוטין כדי שלא יציק במובייל */
+    [data-testid="stSidebar"] { display: none; }
+    [data-testid="stSidebarNav"] { display: none; }
+
+    /* עיצוב כפתורים גדולים ונוחים למובייל */
     div.stButton > button, div.stForm submit_button > button { 
         width: 100%; border-radius: 12px; height: 3.5em; 
         background-color: #FF4B4B; color: white; font-weight: bold; font-size: 18px;
+        box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
     }
+    
+    /* עיצוב הודעת שלום */
     .welcome-msg { 
-        background-color: #f8f9fa; padding: 15px; border-radius: 15px; 
+        background-color: #f8f9fa; padding: 18px; border-radius: 15px; 
         border-right: 8px solid #FF4B4B; margin-bottom: 20px; color: #202124;
+        box-shadow: 0px 2px 4px rgba(0,0,0,0.05);
     }
+    
+    /* תיקון שדות קלט במובייל */
+    .stTextInput input { font-size: 16px !important; }
+    
+    /* עיצוב רדיו הוריוזנטלי (הניווט החדש) */
+    div[data-testid="stMarkdownContainer"] > p { font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -28,6 +45,17 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_israel_time():
     return (datetime.utcnow() + timedelta(hours=2)).strftime("%d/%m/%Y %H:%M:%S")
+
+def load_and_clean_data():
+    try:
+        df = conn.read(ttl=0)
+        for col in ['ID', 'Try', 'Name', 'Target', 'Timestamp']:
+            if col in df.columns:
+                df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip().replace('nan', '')
+        return df
+    except Exception as e:
+        st.error(f"שגיאה בחיבור: {e}")
+        return None
 
 def perform_lottery(df):
     df = df.dropna(subset=['Name', 'ID']).copy()
@@ -38,34 +66,24 @@ def perform_lottery(df):
         random.shuffle(shuffled)
         attempts += 1
     df['Target'] = shuffled
-    df['Try'] = 0
+    df['Try'] = "0"
     df['Timestamp'] = ""
     return df
 
-def load_and_clean_data():
-    """טעינה וניקוי נתונים כדי למנוע שגיאות סוגי נתונים"""
-    try:
-        df = conn.read(ttl=0)
-        # המרה לטקסט וניקוי רווחים/נקודות עשרוניות
-        for col in ['ID', 'Try', 'Name', 'Target', 'Timestamp']:
-            if col in df.columns:
-                df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip().replace('nan', '')
-        return df
-    except Exception as e:
-        st.error(f"שגיאה בגישה לנתונים: {e}")
-        return None
-
-menu = st.sidebar.selectbox("ניווט:", ["כניסת עובדים", "ניהול (HR)"])
+# --- ניווט עליון חדש (במקום sidebar) ---
+st.markdown("### 🧭 לאן תרצו להגיע?")
+menu = st.radio("", ["כניסת עובדים", "ניהול (HR)"], horizontal=True)
+st.write("---")
 
 # --- מסך ניהול ---
 if menu == "ניהול (HR)":
-    st.markdown("<h1 style='text-align: center;'>ניהול משאבי אנוש 🎭</h1>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center;'>ניהול משאבי אנוש 🎭</h2>", unsafe_allow_html=True)
     if 'admin_logged_in' not in st.session_state: st.session_state['admin_logged_in'] = False
 
     if not st.session_state['admin_logged_in']:
         with st.form("admin_login"):
-            pw = st.text_input("סיסמת מנהלת:")
-            if st.form_submit_button("כניסה"):
+            pw = st.text_input("סיסמת מנהלת:", help="הקלידי ולחצי Enter")
+            if st.form_submit_button("כניסה למערכת"):
                 if pw == "פורים2026":
                     st.session_state['admin_logged_in'] = True
                     st.rerun()
@@ -73,31 +91,35 @@ if menu == "ניהול (HR)":
     else:
         data = load_and_clean_data()
         if data is not None:
-            if st.button("🎰 הפעל הגרלה"):
-                df_results = perform_lottery(data)
-                conn.update(data=df_results)
-                st.success("ההגרלה הסתיימה!")
-                st.rerun()
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🎰 הפעל הגרלה"):
+                    df_res = perform_lottery(data)
+                    conn.update(data=df_res)
+                    st.success("בוצע!")
+                    st.rerun()
+            with col2:
+                if st.button("🚪 יציאת מנהלת"):
+                    st.session_state['admin_logged_in'] = False
+                    st.rerun()
             
-            st.write("### 📊 דוח מעקב")
+            st.write("### 📊 מעקב חסוי")
             st.dataframe(data[['Name', 'Try', 'Timestamp', 'Target']].rename(
                 columns={'Name': 'שם', 'Try': 'צפיות', 'Timestamp': 'זמן', 'Target': 'גמד'}), 
                 use_container_width=True)
 
 # --- מסך עובדים ---
-elif menu == "כניסת עובדים":
+else:
     st.markdown("<h1 style='text-align: center;'>🎈 פורים 2026: מי הגמד שלי?</h1>", unsafe_allow_html=True)
     
     if 'logged_in_user_id' not in st.session_state:
         with st.form("login_form"):
-            emp_id_input = st.text_input("הזינו מספר עובד:")
+            emp_id_input = st.text_input("להתחלת המשחק, הזינו מספר עובד:")
             if st.form_submit_button("כניסה"):
                 data = load_and_clean_data()
                 if data is not None:
-                    # חיפוש חכם שמתעלם מפורמט המספר
                     input_clean = str(emp_id_input).strip()
                     user_match = data[data['ID'] == input_clean]
-                    
                     if not user_match.empty:
                         st.session_state['logged_in_user_id'] = input_clean
                         st.session_state['logged_in_name'] = user_match.iloc[0]['Name']
@@ -111,7 +133,6 @@ elif menu == "כניסת עובדים":
             
             st.markdown(f'<div class="welcome-msg"><h3>שלום, {st.session_state["logged_in_name"]}! 👋</h3></div>', unsafe_allow_html=True)
 
-            # בדיקת ניסיונות - המרה בטוחה למספר
             try_val = user_data.get('Try', '0')
             try_val = int(float(try_val)) if try_val != '' else 0
             
@@ -120,12 +141,11 @@ elif menu == "כניסת עובדים":
                 st.info(f"בוצע בתאריך: {user_data.get('Timestamp', 'לא ידוע')}")
                 st.error("מטעמי אבטחה, לא ניתן לצפות בשם שוב.")
                 st.markdown("---")
-                st.markdown("### 📞 שכחת מי הגמד? פנה/י למשאבי אנוש.")
+                st.markdown("### 📞 שכחת מי הגמד שלך? פנה/י למשאבי אנוש.")
             else:
                 if st.button("🎡 הפעל רולטה!"):
                     target_name = user_data['Target']
                     now = get_israel_time()
-                    
                     data.at[user_idx, 'Try'] = "1"
                     data.at[user_idx, 'Timestamp'] = now
                     conn.update(data=data)
@@ -140,8 +160,7 @@ elif menu == "כניסת עובדים":
                     st.balloons()
                     st.success(f"חג שמח! הגמד שלך הוא/היא: {target_name}")
 
-    if 'logged_in_user_id' in st.session_state:
-        if st.sidebar.button("יציאת עובד"):
+        if st.button("🚪 יציאת עובד"):
             del st.session_state['logged_in_user_id']
             del st.session_state['logged_in_name']
             st.rerun()
