@@ -8,26 +8,28 @@ from datetime import datetime, timedelta
 # הגדרות עמוד
 st.set_page_config(page_title="הגמד והענק 2026", layout="centered", page_icon="🎭")
 
-# עיצוב CSS מותאם אישית למובייל
+# עיצוב CSS מותאם אישית למובייל ותיקון יישור טבלאות
 st.markdown("""
     <style>
     .main { direction: rtl; }
     h1, h2, h3, p, div, span { text-align: right; direction: rtl; font-family: 'Segoe UI', sans-serif; }
     [data-testid="stSidebar"] { display: none; }
+    
+    /* כפתורים גדולים למובייל */
     div.stButton > button, div.stForm submit_button > button { 
         width: 100%; border-radius: 12px; height: 3.5em; 
         background-color: #FF4B4B; color: white; font-weight: bold; font-size: 18px;
         box-shadow: 0px 4px 6px rgba(0,0,0,0.1); border: none;
     }
+    
+    /* תיקון נראות טבלה במובייל */
+    .stDataFrame { direction: rtl; }
+    [data-testid="stDataFrame"] td { text-align: right !important; color: #000000 !important; }
+    
     .welcome-msg { 
         background-color: #f1f3f4; padding: 20px; border-radius: 15px; 
         border-right: 8px solid #FF4B4B; margin-bottom: 20px; color: #202124;
     }
-    .stTextInput input { font-size: 16px !important; }
-    div[data-testid="stHorizontalBlock"] { background: #f8f9fa; padding: 10px; border-radius: 10px; }
-    
-    /* תיקון צבע טקסט בטבלאות כדי שיהיה תמיד שחור וקריא */
-    [data-testid="stDataFrame"] td { color: #000000 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -39,29 +41,19 @@ def get_israel_time():
 def load_and_clean_data():
     try:
         df = conn.read(ttl=0)
-        # וודא שכל העמודות קיימות בגיליון, אם לא - צור אותן ריקות
         for col in ['Name', 'ID', 'Target', 'Try', 'Timestamp']:
-            if col not in df.columns:
-                df[col] = ""
-        
-        # ניקוי ערכי NaN (תאים ריקים)
+            if col not in df.columns: df[col] = ""
         df = df.fillna("")
-        
-        # המרה לטקסט וניקוי תווים מיותרים
         for col in df.columns:
-            df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
-            # אם התא היה NaN והפך לטקסט "nan", נחזיר אותו להיות ריק
-            df[col] = df[col].replace('nan', '')
-            
+            df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip().replace('nan', '')
         return df
     except Exception as e:
-        st.error(f"שגיאה בגישה לגוגל שיטס: {e}")
+        st.error(f"שגיאה בחיבור: {e}")
         return None
 
 def play_roulette_sound():
-    roulette_ball_sound = "https://www.soundjay.com/misc/sounds/magic-chime-01.mp3"
-    sound_html = f"""<audio autoplay><source src="{roulette_ball_sound}" type="audio/mp3"></audio>"""
-    st.components.v1.html(sound_html, height=0)
+    sound_url = "https://www.soundjay.com/misc/sounds/magic-chime-01.mp3"
+    st.components.v1.html(f'<audio autoplay><source src="{sound_url}" type="audio/mp3"></audio>', height=0)
 
 # ניווט עליון
 menu = st.radio("", ["כניסת עובדים", "ניהול (HR)"], horizontal=True, label_visibility="collapsed")
@@ -84,7 +76,7 @@ if menu == "ניהול (HR)":
         data = load_and_clean_data()
         if data is not None:
             with st.expander("⚠️ אזור רגיש - ביצוע הגרלה"):
-                st.warning("שים/י לב: ביצוע הגרלה ימחק את כל הרשימה הקיימת!")
+                st.warning("שים/י לב: פעולה זו תמחק את כל ההגרלה הקיימת!")
                 confirm_pw = st.text_input("הקלידי שוב סיסמה לאישור:", type="password")
                 if confirm_pw == "פורים2026":
                     if st.button("🔥 הפעל הגרלה חדשה"):
@@ -92,33 +84,38 @@ if menu == "ניהול (HR)":
                         names = df_copy['Name'].tolist()
                         shuffled = names.copy()
                         random.shuffle(shuffled)
-                        while any(names[i] == shuffled[i] for i in range(len(names))):
-                            random.shuffle(shuffled)
+                        while any(names[i] == shuffled[i] for i in range(len(names))): random.shuffle(shuffled)
                         df_copy['Target'] = shuffled
                         df_copy['Try'] = "0"
                         df_copy['Timestamp'] = ""
                         conn.update(data=df_copy)
-                        st.success("בוצע!")
+                        st.success("הגרלה בוצעה!")
                         st.rerun()
 
             st.write("---")
             col1, col2 = st.columns(2)
             with col1:
                 csv = data.to_csv(index=False).encode('utf-8-sig')
-                st.download_button("📥 הורדת דוח CSV", data=csv, file_name="purim_report.csv")
+                st.download_button("📥 הורדת CSV", data=csv, file_name="purim_report.csv")
             with col2:
                 if st.button("🚪 יציאה"):
                     st.session_state['admin_logged_in'] = False
                     st.rerun()
             
             st.write("### 📊 דוח מעקב")
-            # הוספת "טרם" לתאים ריקים בזמן התצוגה כדי שיהיה מלל בולט
-            display_df = data[['Name', 'Try', 'Timestamp', 'Target']].copy()
-            display_df['Timestamp'] = display_df['Timestamp'].replace('', 'טרם בוצע')
+            # שינוי סדר העמודות: שם -> זמן -> צפיות -> גמד
+            display_df = data[['Name', 'Timestamp', 'Try', 'Target']].copy()
+            display_df['Timestamp'] = display_df['Timestamp'].replace('', 'טרם')
             
-            st.dataframe(display_df.rename(
-                columns={'Name': 'שם', 'Try': 'צפיות', 'Timestamp': 'זמן הגרלה', 'Target': 'הגמד'}), 
-                use_container_width=True)
+            st.dataframe(
+                display_df.rename(columns={'Name': 'שם', 'Timestamp': 'זמן הגרלה', 'Try': 'צפיות', 'Target': 'גמד'}),
+                column_config={
+                    "זמן הגרלה": st.column_config.TextColumn("זמן הגרלה", width="medium"),
+                    "שם": st.column_config.TextColumn("שם", width="small"),
+                },
+                use_container_width=True,
+                hide_index=True
+            )
 
 # --- מסך עובדים ---
 else:
@@ -126,7 +123,7 @@ else:
     if 'logged_in_user_id' not in st.session_state:
         with st.form("login_form"):
             emp_id_input = st.text_input("הזינו מספר עובד:")
-            if st.form_submit_button("כניסה"):
+            if st.form_submit_button("כניסה למערכת"):
                 data = load_and_clean_data()
                 if data is not None:
                     input_clean = str(emp_id_input).strip()
@@ -145,7 +142,7 @@ else:
 
             try_val = int(float(user_data.get('Try', '0')))
             if try_val > 0:
-                st.warning("כבר הגרלת גמד בעבר!")
+                st.warning("המערכת מזהה שכבר הגרלת גמד בעבר.")
                 st.info(f"בוצע בתאריך: {user_data.get('Timestamp', 'לא ידוע')}")
                 st.error("מטעמי אבטחה, לא ניתן לצפות בשם שוב.")
                 st.markdown("### 📞 שכחת מי הגמד? פנה למשאבי אנוש.")
