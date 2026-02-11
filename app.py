@@ -8,12 +8,11 @@ from datetime import datetime, timedelta
 # הגדרות עמוד ועיצוב RTL
 st.set_page_config(page_title="הגמד והענק - פורים 2026", layout="centered", page_icon="🎭")
 
-# עיצוב CSS
+# עיצוב CSS משופר
 st.markdown("""
     <style>
     .main { direction: rtl; }
     h1, h2, h3, p, div { text-align: right; direction: rtl; }
-    /* עיצוב כפתור השליחה בתוך הטופס */
     div.stButton > button, div.stForm submit_button > button { 
         width: 100%; border-radius: 10px; height: 3em; 
         background-color: #FF4B4B; color: white; font-weight: bold; 
@@ -26,6 +25,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# חיבור לנתונים
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_israel_time():
@@ -49,10 +49,29 @@ menu = st.sidebar.selectbox("תפריט ניווט", ["כניסת עובדים",
 # --- מסך ניהול ---
 if menu == "ניהול (HR)":
     st.markdown("<h1 style='text-align: center;'>ניהול משאבי אנוש 🎭</h1>", unsafe_allow_html=True)
-    admin_pw = st.text_input("הזיני סיסמת מנהלת", type="password")
     
-    if admin_pw == "פורים2026":
+    # שימוש ב-session_state לשמירת מצב התחברות של המנהלת
+    if 'admin_logged_in' not in st.session_state:
+        st.session_state['admin_logged_in'] = False
+
+    if not st.session_state['admin_logged_in']:
+        with st.form("admin_login_form"):
+            admin_pw_input = st.text_input("הזיני סיסמת מנהלת (ללא כוכביות, תומך ב-Enter):")
+            admin_submit = st.form_submit_button("כניסה למערכת הניהול")
+            
+            if admin_submit:
+                if admin_pw_input == "פורים2026":
+                    st.session_state['admin_logged_in'] = True
+                    st.rerun()
+                else:
+                    st.error("סיסמה שגויה")
+    else:
+        # תוכן מסך הניהול לאחר התחברות
         st.success("גישה אושרה")
+        if st.sidebar.button("יציאת מנהלת"):
+            st.session_state['admin_logged_in'] = False
+            st.rerun()
+
         try:
             current_data = conn.read(ttl=0)
             if st.button("🎰 בצע הגרלה (זהירות: מאפס הכל)"):
@@ -60,6 +79,7 @@ if menu == "ניהול (HR)":
                 conn.update(data=df_results)
                 st.success("הגרלה בוצעה בהצלחה!")
                 st.rerun()
+            
             st.write("### 📊 דוח מעקב")
             st.dataframe(current_data[['Name', 'Try', 'Timestamp', 'Target']].rename(
                 columns={'Name': 'שם', 'Try': 'ניסיונות', 'Timestamp': 'זמן', 'Target': 'גמד'}), use_container_width=True)
@@ -71,9 +91,7 @@ elif menu == "כניסת עובדים":
     st.markdown("<h1 style='text-align: center;'>🎈 פורים 2026: מי הגמד שלי?</h1>", unsafe_allow_html=True)
     
     if 'logged_in_user' not in st.session_state:
-        # שימוש בטופס מאפשר לחיצה על Enter
         with st.form("login_form"):
-            # שינוי לטקסט רגיל כדי למנוע קפיצת סיסמאות של גוגל
             emp_id_input = st.text_input("להתחלת המשחק, הזינו מספר עובד:")
             submit_button = st.form_submit_button("כניסה למערכת")
             
