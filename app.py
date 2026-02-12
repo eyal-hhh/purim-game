@@ -30,22 +30,6 @@ st.markdown("""
         background-color: #f1f3f4; padding: 20px; border-radius: 15px; 
         border-right: 8px solid #FF4B4B; margin-bottom: 20px; color: #202124;
     }
-
-    /* עיצוב הרולטה */
-    .roulette {
-        width: 200px;
-        height: 200px;
-        border: 16px solid #FF4B4B;
-        border-radius: 50%;
-        border-top: 16px solid transparent;
-        animation: spin 5s linear infinite;
-        display: none; /* מוסתר בהתחלה */
-    }
-
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -119,6 +103,7 @@ if menu == "ניהול (HR)":
                     st.rerun()
             
             st.write("### 📊 דוח מעקב")
+            # שינוי סדר העמודות: שם -> זמן -> צפיות -> גמד
             display_df = data[['Name', 'Timestamp', 'Try', 'Target']].copy()
             display_df['Timestamp'] = display_df['Timestamp'].replace('', 'טרם')
             
@@ -169,24 +154,21 @@ else:
                     data.at[user_idx, 'Try'] = "1"
                     data.at[user_idx, 'Timestamp'] = now
                     conn.update(data=data)
-
-                    # הצגת הרולטה
-                    st.markdown('<div class="roulette" id="roulette"></div>', unsafe_allow_html=True)
-                    st.markdown('<script>document.getElementById("roulette").style.display = "block";</script>', unsafe_allow_html=True)
-
+                    
+                    placeholder = st.empty()
+                    names = data['Name'].tolist()
                     # רולטה 5 שניות
                     for _ in range(40):
-                        st.markdown(f"<h2 style='text-align: center; color: gray;'>{random.choice(data['Name'].tolist())}</h2>", unsafe_allow_html=True)
+                        placeholder.markdown(f"<h2 style='text-align: center; color: gray;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
                         time.sleep(0.05)
                     for i in range(10):
-                        st.markdown(f"<h2 style='text-align: center; color: #FF4B4B;'>{random.choice(data['Name'].tolist())}</h2>", unsafe_allow_html=True)
+                        placeholder.markdown(f"<h2 style='text-align: center; color: #FF4B4B;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
                         time.sleep(0.15)
                     for i in range(3):
-                        st.markdown(f"<h2 style='text-align: center; color: #FF4B4B; font-weight: bold;'>{random.choice(data['Name'].tolist())}</h2>", unsafe_allow_html=True)
+                        placeholder.markdown(f"<h2 style='text-align: center; color: #FF4B4B; font-weight: bold;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
                         time.sleep(0.5)
-
-                    # סיום הרולטה
-                    st.markdown(f"<h1 style='text-align: center; color: #00CC00; font-size: 40px;'>✨ {target_name} ✨</h1>", unsafe_allow_html=True)
+                    
+                    placeholder.markdown(f"<h1 style='text-align: center; color: #00CC00; font-size: 40px;'>✨ {target_name} ✨</h1>", unsafe_allow_html=True)
                     st.balloons()
                     st.success(f"חג שמח! הגמד שלך הוא/היא: {target_name}")
 
