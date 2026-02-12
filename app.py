@@ -1,8 +1,3 @@
-כדי לשדרג את הקוד שלך כך שכאשר מופעלת הרולטה תוצג רולטה מסתובבת, ניתן להשתמש ב-CSS וב-JavaScript. להלן עדכון לקוד שלך, שבו הוספתי אלמנט של רולטה שמסתובבת בזמן שהשמות מוצגים.
-
-### קוד מעודכן
-
-```python
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
@@ -199,10 +194,3 @@ else:
             del st.session_state['logged_in_user_id']
             del st.session_state['logged_in_name']
             st.rerun()
-```
-
-### שינויים עיקריים:
-1. **רולטה מסתובבת**: הוספתי אלמנט `div` עם מחלקה `roulette` שמציג רולטה מסתובבת באמצעות CSS.
-2. **JavaScript**: הוספתי סקריפט שגורם לרולטה להופיע כאשר משתמש לוחץ על "הפעל רולטה!".
-
-כעת, כאשר תלחץ על הכפתור להפעלת הרולטה, תראה רולטה מסתובבת בזמן שהתוצאות מוצגות.
