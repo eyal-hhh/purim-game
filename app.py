@@ -191,4 +191,3 @@ else:
             del st.session_state['logged_in_user_id']
             del st.session_state['logged_in_name']
             st.rerun()
-            
