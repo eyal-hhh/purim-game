@@ -8,17 +8,15 @@ from datetime import datetime, timedelta
 # הגדרות עמוד
 st.set_page_config(page_title="הגמד והענק 2026", layout="centered", page_icon="🎭")
 
-# עיצוב CSS ממוקד למובייל וצמצום רווחים עליונים
+# עיצוב CSS ממוקד למובייל וצמצום רווחים
 st.markdown("""
     <style>
     .main { direction: rtl; }
     h1, h2, h3, p, div, span { text-align: right; direction: rtl; font-family: 'Segoe UI', sans-serif; }
     
-    /* ביטול רווחים עליונים של Streamlit */
     .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; }
     [data-testid="stSidebar"] { display: none; }
 
-    /* כפתורים מותאמים למגע */
     div.stButton > button, div.stForm submit_button > button { 
         width: 100%; border-radius: 12px; height: 3.5em; 
         background-color: #FF4B4B; color: white; font-weight: bold; font-size: 18px;
@@ -30,8 +28,7 @@ st.markdown("""
         border-right: 8px solid #FF4B4B; margin-bottom: 10px; color: #202124;
     }
     
-    /* מניעת זום אוטומטי במובייל */
-    .stTextInput input { font-size: 16px !important; }
+    .stTextInput input, .stSelectbox div[data-baseweb="select"] { font-size: 16px !important; }
     div[data-testid="stHorizontalBlock"] { background: #f8f9fa; padding: 5px; border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
@@ -86,8 +83,7 @@ if menu == "ניהול (HR)":
                         names = df_copy['Name'].tolist()
                         shuffled = names.copy()
                         random.shuffle(shuffled)
-                        while any(names[i] == shuffled[i] for i in range(len(names))): 
-                            random.shuffle(shuffled)
+                        while any(names[i] == shuffled[i] for i in range(len(names))): random.shuffle(shuffled)
                         df_copy['Target'] = shuffled
                         df_copy['Try'] = "0"
                         df_copy['Timestamp'] = ""
@@ -112,76 +108,87 @@ if menu == "ניהול (HR)":
 else:
     st.markdown("<h3 style='text-align: center;'>🎈 פורים 2026: מי הענק שלי?</h3>", unsafe_allow_html=True)
     
-    if 'logged_in_user_id' not in st.session_state:
+    # טעינת נתונים ראשונית להצגת השמות
+    data = load_and_clean_data()
+    
+    if data is not None and 'logged_in_user_id' not in st.session_state:
+        # יצירת רשימת שמות ממוינת א'-ב'
+        all_names = sorted(data['Name'].unique().tolist())
+        
         with st.form("login_form"):
-            emp_id_input = st.text_input("גמדים, הזינו מספר עובד:")
-            if st.form_submit_button("כניסה"):
-                data = load_and_clean_data()
-                if data is not None:
-                    input_clean = str(emp_id_input).strip()
-                    user_match = data[data['ID'] == input_clean]
-                    if not user_match.empty:
-                        st.session_state['logged_in_user_id'] = input_clean
-                        st.session_state['logged_in_name'] = user_match.iloc[0]['Name']
+            selected_name = st.selectbox("בחר/י את שמך מהרשימה:", ["בחר/י שם..."] + all_names)
+            emp_id_input = st.text_input("הזינו מספר עובד לזיהוי:")
+            
+            if st.form_submit_button("כניסה למערכת"):
+                if selected_name == "בחר/י שם...":
+                    st.error("חובה לבחור שם מהרשימה.")
+                else:
+                    # חיפוש השורה של השם שנבחר
+                    user_row = data[data['Name'] == selected_name].iloc[0]
+                    correct_id = str(user_row['ID']).strip()
+                    
+                    if emp_id_input.strip() == correct_id:
+                        st.session_state['logged_in_user_id'] = correct_id
+                        st.session_state['logged_in_name'] = selected_name
                         st.rerun()
-                    else: st.error("מספר עובד לא נמצא.")
-    else:
-        data = load_and_clean_data()
-        if data is not None:
-            user_idx = data[data['ID'] == st.session_state['logged_in_user_id']].index[0]
-            user_data = data.loc[user_idx]
-            
-            st.markdown(f'<div class="welcome-msg"><b>שלום הגמד {st.session_state["logged_in_name"]}!</b></div>', unsafe_allow_html=True)
+                    else:
+                        st.error("מספר עובד לא תואם לשם שנבחר.")
+    
+    elif data is not None:
+        # המשתמש כבר מחובר
+        user_idx = data[data['ID'] == st.session_state['logged_in_user_id']].index[0]
+        user_data = data.loc[user_idx]
+        
+        st.markdown(f'<div class="welcome-msg"><b>שלום הגמד {st.session_state["logged_in_name"]}!</b></div>', unsafe_allow_html=True)
 
-            result_placeholder = st.empty()
+        result_placeholder = st.empty()
 
-            try:
-                try_val = int(float(user_data.get('Try', '0')))
-            except:
-                try_val = 0
-            
-            # בדיקת אבטחה: האם כבר צפה בעבר?
-            if try_val > 0:
-                result_placeholder.warning("המערכת מזהה שכבר הגרלת ענק בעבר.")
-                st.info(f"הפעולה בוצעה בתאריך: {user_data.get('Timestamp', 'לא ידוע')}")
-                st.error("מטעמי אבטחה, לא ניתן לצפות בשם הענק פעם נוספת דרך המערכת.")
-                st.markdown("---")
-                st.markdown("### 📞 שכחת מי הענק שלך?")
-                st.markdown("אין בעיה! ניתן לפנות למשאבי אנוש (HR) כדי לוודא מי הענק שקיבלת.")
-            else:
-                # כפתור הפעלה רק למי שטרם הגריל
-                if st.button("🎡 גלה מי הענק שלי!", key="play_btn"):
-                    play_roulette_sound()
-                    target_name = user_data['Target']
-                    now = get_israel_time()
-                    
-                    # עדכון מיידי בגוגל שיטס כדי למנוע צפייה חוזרת
-                    data.at[user_idx, 'Try'] = "1"
-                    data.at[user_idx, 'Timestamp'] = now
-                    conn.update(data=data)
-                    
-                    # הרולטה רצה גבוה בדף
-                    names = data['Name'].tolist()
-                    for _ in range(35): # שלב מהיר
-                        result_placeholder.markdown(f"<h2 style='text-align: center; color: gray;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
-                        time.sleep(0.06)
-                    for _ in range(8): # האטה
-                        result_placeholder.markdown(f"<h2 style='text-align: center; color: #FF4B4B;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
-                        time.sleep(0.18)
-                    for _ in range(3): # עצירה מותחת
-                        result_placeholder.markdown(f"<h2 style='text-align: center; color: #FF4B4B; font-weight: bold;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
-                        time.sleep(0.5)
-                    
-                    # חשיפת התוצאה
-                    result_placeholder.markdown(f"""
-                        <div style="text-align: center; background-color: #e8f5e9; padding: 20px; border-radius: 15px; border: 2px solid #4caf50;">
-                            <h2 style="margin: 0;">הענק שלך הוא/היא:</h2>
-                            <h1 style="color: #2e7d32; font-size: 45px; margin: 10px 0;">✨ {target_name} ✨</h1>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    st.balloons()
+        try:
+            try_val = int(float(user_data.get('Try', '0')))
+        except:
+            try_val = 0
+        
+        if try_val > 0:
+            result_placeholder.warning("המערכת מזהה שכבר הגרלת ענק בעבר.")
+            st.info(f"הפעולה בוצעה בתאריך: {user_data.get('Timestamp', 'לא ידוע')}")
+            st.error("מטעמי אבטחה, לא ניתן לצפות בשם הענק פעם נוספת.")
+            st.markdown("---")
+            st.markdown("### 📞 שכחת מי הענק שלך? פנה למשאבי אנוש.")
+        else:
+            button_placeholder = st.empty()
+            if button_placeholder.button("🎡 גלה מי הענק שלי!", key="play_btn"):
+                button_placeholder.empty()
+                play_roulette_sound()
+                target_name = user_data['Target']
+                now = get_israel_time()
+                
+                # עדכון נתונים
+                data.at[user_idx, 'Try'] = "1"
+                data.at[user_idx, 'Timestamp'] = now
+                conn.update(data=data)
+                
+                # רולטה
+                names = data['Name'].tolist()
+                for _ in range(35):
+                    result_placeholder.markdown(f"<h2 style='text-align: center; color: gray;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
+                    time.sleep(0.06)
+                for _ in range(8):
+                    result_placeholder.markdown(f"<h2 style='text-align: center; color: #FF4B4B;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
+                    time.sleep(0.18)
+                for _ in range(3):
+                    result_placeholder.markdown(f"<h2 style='text-align: center; color: #FF4B4B; font-weight: bold;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
+                    time.sleep(0.5)
+                
+                result_placeholder.markdown(f"""
+                    <div style="text-align: center; background-color: #e8f5e9; padding: 20px; border-radius: 15px; border: 2px solid #4caf50;">
+                        <h2 style="margin: 0;">הענק שלך הוא/היא:</h2>
+                        <h1 style="color: #2e7d32; font-size: 45px; margin: 10px 0;">✨ {target_name} ✨</h1>
+                    </div>
+                """, unsafe_allow_html=True)
+                st.balloons()
 
         if st.button("🚪 יציאה", key="user_logout"):
             del st.session_state['logged_in_user_id']
             del st.session_state['logged_in_name']
             st.rerun()
+            
