@@ -131,10 +131,8 @@ else:
             user_idx = data[data['ID'] == st.session_state['logged_in_user_id']].index[0]
             user_data = data.loc[user_idx]
             
-            # שלום לגמד
             st.markdown(f'<div class="welcome-msg"><b>שלום הגמד {st.session_state["logged_in_name"]}!</b></div>', unsafe_allow_html=True)
 
-            # מקום שמור לרולטה ולתוצאה - גבוה בדף!
             result_placeholder = st.empty()
 
             try:
@@ -142,35 +140,39 @@ else:
             except:
                 try_val = 0
             
+            # בדיקת אבטחה: האם כבר צפה בעבר?
             if try_val > 0:
-                result_placeholder.error(f"כבר גילית שהענק שלך הוא/היא: {user_data['Target']}")
-                st.info(f"בוצע ב: {user_data.get('Timestamp', 'לא ידוע')}")
-                st.markdown("### 📞 לשאלות פנו למשאבי אנוש.")
+                result_placeholder.warning("המערכת מזהה שכבר הגרלת ענק בעבר.")
+                st.info(f"הפעולה בוצעה בתאריך: {user_data.get('Timestamp', 'לא ידוע')}")
+                st.error("מטעמי אבטחה, לא ניתן לצפות בשם הענק פעם נוספת דרך המערכת.")
+                st.markdown("---")
+                st.markdown("### 📞 שכחת מי הענק שלך?")
+                st.markdown("אין בעיה! ניתן לפנות למשאבי אנוש (HR) כדי לוודא מי הענק שקיבלת.")
             else:
-                # כפתור ההפעלה
+                # כפתור הפעלה רק למי שטרם הגריל
                 if st.button("🎡 גלה מי הענק שלי!", key="play_btn"):
                     play_roulette_sound()
                     target_name = user_data['Target']
                     now = get_israel_time()
                     
-                    # עדכון נתונים
+                    # עדכון מיידי בגוגל שיטס כדי למנוע צפייה חוזרת
                     data.at[user_idx, 'Try'] = "1"
                     data.at[user_idx, 'Timestamp'] = now
                     conn.update(data=data)
                     
-                    # הרולטה רצה בתוך ה-placeholder הגבוה
+                    # הרולטה רצה גבוה בדף
                     names = data['Name'].tolist()
-                    for _ in range(35): # מהיר
+                    for _ in range(35): # שלב מהיר
                         result_placeholder.markdown(f"<h2 style='text-align: center; color: gray;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
                         time.sleep(0.06)
-                    for _ in range(8): # מאט
+                    for _ in range(8): # האטה
                         result_placeholder.markdown(f"<h2 style='text-align: center; color: #FF4B4B;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
                         time.sleep(0.18)
-                    for _ in range(3): # עצירה
+                    for _ in range(3): # עצירה מותחת
                         result_placeholder.markdown(f"<h2 style='text-align: center; color: #FF4B4B; font-weight: bold;'>{random.choice(names)}</h2>", unsafe_allow_html=True)
                         time.sleep(0.5)
                     
-                    # הצגת התוצאה הסופית באותו מקום גבוה
+                    # חשיפת התוצאה
                     result_placeholder.markdown(f"""
                         <div style="text-align: center; background-color: #e8f5e9; padding: 20px; border-radius: 15px; border: 2px solid #4caf50;">
                             <h2 style="margin: 0;">הענק שלך הוא/היא:</h2>
